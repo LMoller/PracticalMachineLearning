@@ -1,0 +1,151 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "E. Moller"
+date: "July 3, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/moller.elisabeth/Desktop/Coursera/8-Practical Machine Learning")
+```
+```{r}
+library(caret)
+library(randomForest)
+library(ggplot2)
+```
+#Getting and Cleaning the Data
+Read Data
+```{r}
+testing <- read.csv("pml-testing.csv")
+training <- read.csv("pml-training.csv")
+```
+Look at the structure and dimensions of the Training Data
+```{r}
+View(training)
+dim(training)
+```
+Look at the dimensions of the Testing Data to quickly verify they are the same structure
+```{r}
+dim(testing)
+```
+Partition the Training Data to a Model Training and Testing Set
+```{r}
+partition <- createDataPartition(training$classe, p=0.7, list=FALSE)
+modelTrain <- training[partition, ]
+modelTest <- training[-partition, ]
+dim(modelTrain)
+```
+```{r}
+dim(modelTest)
+```
+Remove dimensions not relevant to the model - ie, X, user_name and timestamps
+```{r}
+modelTrain <- modelTrain[, -(1:5)]
+modelTest  <- modelTest[, -(1:5)]
+dim(modelTrain)
+```
+```{r}
+dim(modelTest)
+```
+Remove dimensions that have little variance - "predictors that have one unique value (i.e. are zero variance predictors) or predictors that are have both of the following characteristics: they have very few unique values relative to the number of samples and the ratio of the frequency of the most common value to the frequency of the second most common value is large." (R Help)
+```{r}
+nzvPredictors <- nearZeroVar(modelTrain)
+modelTrain <- modelTrain[, -nzvPredictors]
+modelTest <- modelTest[, -nzvPredictors]
+dim(modelTrain)
+```
+```{r}
+dim(modelTest)
+```
+Remove dimensions that have mostly NA values
+```{r}
+NAval <- colMeans(is.na(modelTrain)) > 0.95
+modelTrain <- modelTrain[, NAval==FALSE]
+modelTest <- modelTest[, NAval==FALSE]
+dim(modelTrain)
+```
+```{r}
+dim(modelTest)
+```
+#Models
+I will look at three different models and compare the accuracy to decide which one to use on the final portion of the project.
+```{r}
+control <- trainControl(method='cv', number = 3)
+```
+##CART
+###Build
+I will first try a CART model via rpart.
+```{r}
+cartModel <- train(classe ~ .,data=modelTrain,trControl=control,method='rpart')
+```
+###Test the Accuracy
+I will test the accuracy of the CART model by predicting 'classe' in my partitioned data
+```{r}
+predCART <- predict(cartModel, newdata=modelTest)
+
+#The confusion matrix visually shows how well the model does
+confusionMatrix(modelTest$classe, predCART)
+
+```
+##Random Forest
+###Build
+```{r}
+rfModel <- train(classe ~ .,data=modelTrain,trControl=control,method='rf')
+```
+###Test the Accuracy
+I will test the accuracy of the Random Forest model by predicting 'classe' in my partitioned data
+```{r}
+predRF <- predict(rfModel, newdata=modelTest)
+
+#The confusion matrix visually shows how well the model does
+confusionMatrix(modelTest$classe, predRF)
+
+```
+##Gradient Boosting
+###Build
+```{r}
+gbmModel <- train(classe ~ .,data=modelTrain,trControl=control,method='gbm')
+```
+###Test the Accuracy
+I will test the accuracy of the Gradient Boost model by predicting 'classe' in my partitioned data
+```{r}
+predGBM <- predict(gbmModel, newdata=modelTest)
+
+#The confusion matrix visually shows how well the model does
+confusionMatrix(modelTest$classe, predGBM)
+```
+##Accuracy of Models
+CART - 57.2%
+Random Forest - 99.9%
+Gradient Boost - 98.8%
+
+The accuracy of the Random Forest model outperformed the GBM and CART Model. I will use the Random Forest Model on the class of 20 predictions. First, I will retrain the model on the full 'training' dataset instead of just the partitioned portion.
+
+#Retrain the Model on the full 'training' set
+```{r}
+#Remove dimensions not relevant to the model
+training <- training[, -(1:5)]
+
+#Remove dimensions with little variance
+nzvPredictorsfull <- nearZeroVar(training)
+training <- training[, -nzvPredictorsfull]
+
+#Remove dimensions with mostly NA values
+NAvalFull <- colMeans(is.na(training)) > 0.95
+training <- training[, NAvalFull==FALSE]
+
+#Refit the model
+control <- trainControl(method='cv', number = 3)
+rfModel <- train(classe ~ .,data=training,trControl=control,method='rf')
+```
+
+Now I will use the trained model to predict the test set ("pml-testing.csv").
+
+#Final Prediction
+```{r}
+#Predict using the test set
+finalPrediction <- predict(rfModel, newdata=testing)
+
+print(finalPrediction)
+```
